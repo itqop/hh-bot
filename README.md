@@ -21,7 +21,7 @@
 
 ```bash
 # Клонируем репозиторий
-git clone https://github.com/your-username/hh-bot.git
+git clone https://github.com/itqop/hh-bot.git
 cd hh-bot
 
 # Устанавливаем зависимости
@@ -183,7 +183,7 @@ class AppConstants:
 
 ```bash
 # Клонируем и устанавливаем в dev режиме
-git clone https://github.com/your-username/hh-bot.git
+git clone https://github.com/itqop/hh-bot.git
 cd hh-bot
 pip install -e .
 
@@ -261,9 +261,8 @@ A: Проверьте подключение к интернету и досту
 
 ## 📞 Поддержка
 
-- 🐛 **Баги**: [GitHub Issues](https://github.com/your-username/hh-bot/issues)
-- 💡 **Предложения**: [GitHub Discussions](https://github.com/your-username/hh-bot/discussions)
-- 📧 **Email**: your-email@example.com
+- 🐛 **Баги**: [GitHub Issues](https://github.com/itqop/hh-bot/issues)
+- 💡 **Предложения**: [GitHub Discussions](https://github.com/itqop/hh-bot/discussions)
 
 ---
 
