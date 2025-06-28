@@ -1,7 +1,3 @@
-"""
-🤖 Сервис для работы с Gemini AI
-"""
-
 import json
 import requests
 import logging
@@ -49,7 +45,9 @@ class GeminiApiClient:
             )
 
             if response.status_code != 200:
-                logger.error(f"Ошибка API Gemini: {response.status_code}, {response.text}")
+                logger.error(
+                    f"Ошибка API Gemini: {response.status_code}, {response.text}"
+                )
                 return None
 
             result = response.json()
@@ -185,7 +183,7 @@ class VacancyAnalyzer:
                 reasons = response.get("match_reasons", ["AI анализ выполнен"])
                 return self._validate_score(score), reasons
             else:
-                logger.warning("Ошибка анализа Gemini, используем базовую фильтрацию")
+                logger.error("Ошибка анализа Gemini, используем базовую фильтрацию")
                 return self._basic_analysis(vacancy)
 
         except Exception as e:
@@ -326,7 +324,9 @@ class GeminiAIService:
         """Принятие решения о подаче заявки"""
         if not self.is_available() or not self.analyzer:
 
-            score, _ = VacancyAnalyzer(None, self.resume_loader)._basic_analysis(vacancy)
+            score, _ = VacancyAnalyzer(None, self.resume_loader)._basic_analysis(
+                vacancy
+            )
             return score >= settings.gemini.match_threshold
 
         return self.analyzer.should_apply(vacancy)

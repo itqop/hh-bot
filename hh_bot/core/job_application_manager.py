@@ -1,7 +1,3 @@
-"""
-🎯 Главный менеджер для автоматизации откликов на вакансии
-"""
-
 import logging
 from typing import List, Dict, Optional
 import time
@@ -21,8 +17,13 @@ class AutomationOrchestrator:
 
     def __init__(self):
         self.api_service = HHApiService()
-        self.ai_service = GeminiAIService()
         self.browser_service = BrowserService()
+        self.ai_service = None
+
+    def _get_ai_service(self):
+        if self.ai_service is None:
+            self.ai_service = GeminiAIService()
+        return self.ai_service
 
     def execute_automation_pipeline(
         self, keywords: Optional[str] = None, use_ai: bool = True
@@ -34,12 +35,13 @@ class AutomationOrchestrator:
             if not vacancies:
                 return {"error": "Подходящие вакансии не найдены"}
 
-            if use_ai and self.ai_service.is_available():
-                vacancies = self._ai_filter_vacancies(vacancies)
+            if use_ai and self._get_ai_service().is_available():
+                vacancies = self._ai_filter_vacancies(vacancies[:3])
                 if not vacancies:
-                    return {"error": "После AI фильтрации не осталось подходящих вакансий"}
+                    return {"error": "После AI фильтрации подходящих вакансий нет"}
 
-            if not self._initialize_browser_and_auth():
+            init_ok = self._initialize_browser_and_auth()
+            if not init_ok:
                 return {"error": "Ошибка инициализации браузера или авторизации"}
 
             application_results = self._apply_to_vacancies(vacancies)
@@ -55,7 +57,9 @@ class AutomationOrchestrator:
         finally:
             self._cleanup()
 
-    def _search_and_filter_vacancies(self, keywords: Optional[str] = None) -> List[Vacancy]:
+    def _search_and_filter_vacancies(
+        self, keywords: Optional[str] = None
+    ) -> List[Vacancy]:
         """Поиск и базовая фильтрация вакансий"""
         logger.info("🔍 ЭТАП 1: Поиск вакансий")
 
@@ -65,7 +69,9 @@ class AutomationOrchestrator:
                 logger.warning("Вакансии не найдены через API")
                 return []
 
-            suitable_vacancies = self.api_service.filter_suitable_vacancies(all_vacancies)
+            suitable_vacancies = self.api_service.filter_suitable_vacancies(
+                all_vacancies, search_keywords=keywords or ""
+            )
 
             self._log_search_results(all_vacancies, suitable_vacancies)
             return suitable_vacancies
@@ -86,7 +92,7 @@ class AutomationOrchestrator:
             logger.info(f"Анализ {i}/{total_count}: {truncated_name}...")
 
             try:
-                if self.ai_service.should_apply(vacancy):
+                if self._get_ai_service().should_apply(vacancy):
                     ai_suitable.append(vacancy)
                     logger.info("✅ Добавлено в список для отклика")
                 else:
@@ -123,25 +129,39 @@ class AutomationOrchestrator:
             return False
 
     def _apply_to_vacancies(self, vacancies: List[Vacancy]) -> List[ApplicationResult]:
-        """Подача заявок на вакансии"""
-        max_apps = settings.application.max_applications
-        vacancies_to_process = vacancies[:max_apps]
+        max_successful_apps = settings.application.max_applications
 
-        logger.info(f"📨 ЭТАП 4: Подача заявок (максимум {max_apps})")
-        logger.info("💡 Между заявками добавляются паузы для безопасности")
+        logger.info(f"📨 ЭТАП 4: Подача заявок (максимум {max_successful_apps} успешных)")
+        logger.info("💡 Между заявками добавляются паузы")
+        logger.info("💡 Лимит считается только по успешным заявкам")
 
         application_results = []
+        successful_count = 0
+        processed_count = 0
 
-        for i, vacancy in enumerate(vacancies_to_process, 1):
+        for vacancy in vacancies:
+            if successful_count >= max_successful_apps:
+                logger.info(f"🎯 Достигнут лимит успешных заявок: {max_successful_apps}")
+                break
+
+            processed_count += 1
             truncated_name = UIFormatter.truncate_text(vacancy.name, medium=True)
-            logger.info(f"Обработка {i}/{len(vacancies_to_process)}: {truncated_name}...")
+            logger.info(
+                f"Обработка {processed_count}: {truncated_name} (успешных: {successful_count}/{max_successful_apps})"
+            )
 
             try:
-                result = self.browser_service.apply_to_vacancy(vacancy.alternate_url, vacancy.name)
+                result = self.browser_service.apply_to_vacancy(
+                    vacancy.alternate_url, vacancy.name
+                )
                 application_results.append(result)
                 self._log_application_result(result)
 
-                if i < len(vacancies_to_process):
+                if result.success:
+                    successful_count += 1
+                    logger.info(f"   🎉 Успешных заявок: {successful_count}/{max_successful_apps}")
+
+                if processed_count < len(vacancies) and successful_count < max_successful_apps:
                     self.browser_service.add_random_pause()
 
             except Exception as e:
@@ -154,15 +174,20 @@ class AutomationOrchestrator:
                 )
                 application_results.append(error_result)
 
+        logger.info(f"🏁 Обработка завершена. Обработано вакансий: {processed_count}, успешных заявок: {successful_count}")
         return application_results
 
-    def _log_search_results(self, all_vacancies: List[Vacancy], suitable: List[Vacancy]):
+    def _log_search_results(
+        self, all_vacancies: List[Vacancy], suitable: List[Vacancy]
+    ):
         """Логирование результатов поиска"""
         logger.info("📊 Результат базовой фильтрации:")
         logger.info(f"   🔍 Всего: {len(all_vacancies)}")
         logger.info(f"   ✅ Подходящих: {len(suitable)}")
         if len(all_vacancies) > 0:
-            percentage = UIFormatter.format_percentage(len(suitable), len(all_vacancies))
+            percentage = UIFormatter.format_percentage(
+                len(suitable), len(all_vacancies)
+            )
             logger.info(f"   📈 % соответствия: {percentage}")
 
     def _log_ai_results(self, total_analyzed: int, ai_suitable: List[Vacancy]):
@@ -180,6 +205,8 @@ class AutomationOrchestrator:
             logger.info("   ✅ Заявка отправлена успешно")
         elif result.already_applied:
             logger.info("   ⚠️ Уже откликались ранее")
+        elif result.skipped:
+            logger.warning(f"   ⏭️ Пропущено: {result.error_message}")
         else:
             logger.warning(f"   ❌ Ошибка: {result.error_message}")
 
@@ -188,13 +215,15 @@ class AutomationOrchestrator:
         total_applications = len(application_results)
         successful = sum(1 for r in application_results if r.success)
         already_applied = sum(1 for r in application_results if r.already_applied)
-        failed = total_applications - successful - already_applied
+        skipped = sum(1 for r in application_results if r.skipped)
+        failed = total_applications - successful - already_applied - skipped
 
         return {
             "total_applications": total_applications,
             "successful": successful,
             "failed": failed,
             "already_applied": already_applied,
+            "skipped": skipped,
         }
 
     def _cleanup(self):
@@ -208,12 +237,16 @@ class JobApplicationManager:
 
     def __init__(self):
 
-        LoggingConfigurator.setup_logging(log_file="logs/hh_bot.log", console_output=False)
+        LoggingConfigurator.setup_logging(
+            log_file="logs/hh_bot.log", console_output=True
+        )
 
         self.orchestrator = AutomationOrchestrator()
         self.application_results: List[ApplicationResult] = []
 
-    def run_automation(self, keywords: Optional[str] = None, use_ai: bool = True) -> Dict:
+    def run_automation(
+        self, keywords: Optional[str] = None, use_ai: bool = True
+    ) -> Dict:
         """Запуск полного цикла автоматизации"""
         print("🚀 Запуск автоматизации HH.ru")
         print(UIFormatter.create_separator())
@@ -221,8 +254,7 @@ class JobApplicationManager:
         stats = self.orchestrator.execute_automation_pipeline(keywords, use_ai)
 
         if "error" not in stats:
-
-            pass
+            self.application_results = []
 
         return stats
 
@@ -241,6 +273,7 @@ class JobApplicationManager:
         print(f"📝 Всего попыток подачи заявок: {stats['total_applications']}")
         print(f"✅ Успешно отправлено: {stats['successful']}")
         print(f"⚠️ Уже откликались ранее: {stats['already_applied']}")
+        print(f"⏭️ Пропущено (тестовые/ошибки): {stats['skipped']}")
         print(f"❌ Неудачных попыток: {stats['failed']}")
 
         if stats["total_applications"] > 0:

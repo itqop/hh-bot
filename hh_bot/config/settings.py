@@ -1,21 +1,16 @@
-"""
-⚙️ Конфигурация для HH.ru автоматизации
-"""
-
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
 
 class AppConstants:
-    """Константы приложения"""
 
     HH_BASE_URL = "https://api.hh.ru"
     HH_SITE_URL = "https://hh.ru"
     GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
     GEMINI_MODEL = "gemini-2.0-flash"
 
-    DEFAULT_TIMEOUT = 30
+    DEFAULT_TIMEOUT = 20
     API_PAUSE_SECONDS = 0.5
     AI_REQUEST_PAUSE = 1
 
@@ -45,9 +40,8 @@ class AppConstants:
 
 @dataclass
 class HHSearchConfig:
-    """Настройки поиска вакансий"""
 
-    keywords: str = "python junior"
+    keywords: str = "python"
     area: str = "1"
     experience: str = "noExperience"
     per_page: int = AppConstants.MAX_VACANCIES_PER_PAGE
@@ -57,7 +51,6 @@ class HHSearchConfig:
 
 @dataclass
 class BrowserConfig:
-    """Настройки браузера"""
 
     headless: bool = False
     wait_timeout: int = 15
@@ -67,7 +60,6 @@ class BrowserConfig:
 
 @dataclass
 class ApplicationConfig:
-    """Настройки подачи заявок"""
 
     max_applications: int = AppConstants.DEFAULT_MAX_APPLICATIONS
     pause_min: float = 3.0
@@ -77,7 +69,6 @@ class ApplicationConfig:
 
 @dataclass
 class GeminiConfig:
-    """Настройки Gemini AI"""
 
     api_key: str = ""
     model: str = AppConstants.GEMINI_MODEL
@@ -87,7 +78,6 @@ class GeminiConfig:
 
 @dataclass
 class ResumeConfig:
-    """Настройки резюме"""
 
     experience_file: str = AppConstants.DEFAULT_EXPERIENCE_FILE
     about_me_file: str = AppConstants.DEFAULT_ABOUT_FILE
@@ -95,11 +85,9 @@ class ResumeConfig:
 
 
 class ResumeFileManager:
-    """Менеджер для работы с файлами резюме"""
 
     @staticmethod
     def create_sample_files() -> None:
-        """Создание примеров файлов резюме"""
         data_dir = Path("data")
         data_dir.mkdir(exist_ok=True)
 
@@ -108,12 +96,7 @@ class ResumeFileManager:
             experience_file.write_text(
                 """
 Опыт работы:
-- Изучаю Python уже 6 месяцев
-- Прошел курсы по основам программирования
-- Делал учебные проекты: калькулятор, игра в крестики-нолики
-- Изучаю Django и Flask для веб-разработки
-- Базовые знания SQL и работы с базами данных
-- Знаком с Git для контроля версий
+- ноль
 """.strip(),
                 encoding="utf-8",
             )
@@ -124,11 +107,7 @@ class ResumeFileManager:
             about_file.write_text(
                 """
 О себе:
-Начинающий Python разработчик с большим желанием учиться и развиваться.
-Интересуюсь веб-разработкой и анализом данных.
-Быстро обучаюсь, ответственно подхожу к работе.
-Готов к стажировке или junior позиции для получения практического опыта.
-Хочу работать в команде опытных разработчиков и вносить вклад в интересные проекты.
+Котенок.
 """.strip(),
                 encoding="utf-8",
             )
@@ -139,15 +118,7 @@ class ResumeFileManager:
             skills_file.write_text(
                 """
 Технические навыки:
-- Python (основы, ООП, модули)
-- SQL (SELECT, JOIN, базовые запросы)
-- Git (commit, push, pull, merge)
-- HTML/CSS (базовые знания)
-- Django (учебные проекты)
-- Flask (микрофреймворк)
-- PostgreSQL, SQLite
-- Linux (базовые команды)
-- VS Code, PyCharm
+- Мяу
 """.strip(),
                 encoding="utf-8",
             )
@@ -155,23 +126,25 @@ class ResumeFileManager:
 
 
 class UIFormatter:
-    """Утилиты для форматирования пользовательского интерфейса"""
 
     @staticmethod
     def create_separator(long: bool = False) -> str:
-        """Создание разделительной линии"""
-        length = AppConstants.LONG_SEPARATOR_LENGTH if long else AppConstants.SHORT_SEPARATOR_LENGTH
+        length = (
+            AppConstants.LONG_SEPARATOR_LENGTH
+            if long
+            else AppConstants.SHORT_SEPARATOR_LENGTH
+        )
         return "=" * length
 
     @staticmethod
     def truncate_text(text: str, medium: bool = False) -> str:
-        """Обрезание текста до заданного лимита"""
-        limit = AppConstants.MEDIUM_TEXT_LIMIT if medium else AppConstants.SHORT_TEXT_LIMIT
+        limit = (
+            AppConstants.MEDIUM_TEXT_LIMIT if medium else AppConstants.SHORT_TEXT_LIMIT
+        )
         return text[:limit]
 
     @staticmethod
     def format_percentage(value: float, total: float) -> str:
-        """Форматирование процентного соотношения"""
         if total <= 0:
             return "0.0%"
         percentage = (value / total) * AppConstants.PERCENT_MULTIPLIER
@@ -179,7 +152,6 @@ class UIFormatter:
 
     @staticmethod
     def print_section_header(title: str, long: bool = False) -> None:
-        """Печать заголовка секции с разделителями"""
         separator = UIFormatter.create_separator(long)
         print(f"\n{separator}")
         print(title)
@@ -187,10 +159,8 @@ class UIFormatter:
 
 
 class Settings:
-    """Главный класс настроек"""
 
     def __init__(self):
-
         self._load_env()
 
         self.hh_search = HHSearchConfig()
@@ -202,7 +172,6 @@ class Settings:
         self._validate_config()
 
     def _load_env(self) -> None:
-        """Загрузка переменных окружения"""
         try:
             from dotenv import load_dotenv
 
@@ -211,7 +180,6 @@ class Settings:
             print("💡 Установите python-dotenv для работы с .env файлами")
 
     def _validate_config(self) -> None:
-        """Валидация настроек"""
         if not self.gemini.api_key:
             print("⚠️ GEMINI_API_KEY не установлен в переменных окружения")
 
@@ -222,13 +190,14 @@ class Settings:
         logs_dir.mkdir(exist_ok=True)
 
     def update_search_keywords(self, keywords: str) -> None:
-        """Обновление ключевых слов поиска"""
         self.hh_search.keywords = keywords
         print(f"🔄 Обновлены ключевые слова: {keywords}")
 
     def enable_ai_matching(self) -> bool:
-        """Проверяем можно ли использовать AI сравнение"""
         return bool(self.gemini.api_key)
+
+    def get_exclude_keywords(self) -> list:
+        return ['стажер', 'cv']
 
 
 settings = Settings()

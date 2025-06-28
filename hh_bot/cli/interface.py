@@ -1,17 +1,11 @@
-"""
-🖥️ Интерфейс командной строки для HH.ru автоматизации
-"""
-
 from ..core.job_application_manager import JobApplicationManager
 from ..config.settings import settings, ResumeFileManager, UIFormatter
 
 
 class CLIInterface:
-    """Интерфейс командной строки"""
 
     @staticmethod
     def print_welcome():
-        """Приветственное сообщение"""
         print("🚀 HH.ru АВТОМАТИЗАЦИЯ v2.0")
         print(UIFormatter.create_separator())
         print("🏗️ Архитектурно правильная версия")
@@ -21,19 +15,16 @@ class CLIInterface:
 
     @staticmethod
     def print_settings_info():
-        """Информация о настройках"""
         print("\n⚙️ ТЕКУЩИЕ НАСТРОЙКИ:")
         print(f"🔍 Ключевые слова: {settings.hh_search.keywords}")
         print(f"📊 Максимум заявок: {settings.application.max_applications}")
-        print(
-            f"🤖 Gemini AI: "
-            f"{'✅ Доступен' if settings.enable_ai_matching() else '❌ Недоступен'}"
-        )
-        print(f"🌐 Режим браузера: " f"{'Фоновый' if settings.browser.headless else 'Видимый'}")
+        ai_status = "✅ Доступен" if settings.enable_ai_matching() else "❌ Недоступен"
+        print(f"🤖 Gemini AI: {ai_status}")
+        browser_mode = "Фоновый" if settings.browser.headless else "Видимый"
+        print(f"🌐 Режим браузера: {browser_mode}")
 
     @staticmethod
     def get_user_preferences():
-        """Получение предпочтений пользователя"""
         print("\n🎯 НАСТРОЙКА ПОИСКА:")
 
         keywords = input(f"Ключевые слова [{settings.hh_search.keywords}]: ").strip()
@@ -48,12 +39,19 @@ class CLIInterface:
             print("⚠️ AI фильтрация недоступна (нет GEMINI_API_KEY)")
             use_ai = False
 
-        max_apps_input = input(
-            f"Максимум заявок [{settings.application.max_applications}]: "
-        ).strip()
+        excludes = ", ".join(settings.get_exclude_keywords()[:5])
+        print(f"\n🚫 Текущие исключения: {excludes}...")
+        exclude_choice = input("Изменить список исключений? [y/n]: ").lower()
+        if exclude_choice == "y":
+            CLIInterface._configure_exclude_keywords()
+
+        prompt = f"Максимум заявок [{settings.application.max_applications}]: "
+        max_apps_input = input(prompt).strip()
         try:
             max_apps = (
-                int(max_apps_input) if max_apps_input else settings.application.max_applications
+                int(max_apps_input)
+                if max_apps_input
+                else settings.application.max_applications
             )
         except ValueError:
             max_apps = settings.application.max_applications
@@ -61,8 +59,24 @@ class CLIInterface:
         return keywords, use_ai, max_apps
 
     @staticmethod
+    def _configure_exclude_keywords():
+        print("\n⚙️ НАСТРОЙКА ИСКЛЮЧЕНИЙ:")
+        print("Введите слова через запятую (или Enter для значений по умолчанию):")
+        current_excludes = ", ".join(settings.get_exclude_keywords())
+        print(f"Текущие: {current_excludes}")
+
+        new_excludes = input("Новые исключения: ").strip()
+        if new_excludes:
+            exclude_list = [
+                word.strip() for word in new_excludes.split(",") if word.strip()
+            ]
+            settings.get_exclude_keywords = lambda: exclude_list
+            print(f"✅ Обновлены исключения: {exclude_list}")
+        else:
+            print("✅ Оставлены значения по умолчанию")
+
+    @staticmethod
     def print_final_stats(stats):
-        """Вывод итоговой статистики"""
         UIFormatter.print_section_header("📊 ИТОГОВАЯ СТАТИСТИКА:", long=True)
 
         if "error" in stats:
@@ -71,6 +85,9 @@ class CLIInterface:
             print(f"📝 Всего заявок: {stats['total_applications']}")
             print(f"✅ Успешных: {stats['successful']}")
             print(f"❌ Неудачных: {stats['failed']}")
+            
+            if "skipped" in stats and stats["skipped"] > 0:
+                print(f"⏭️ Пропущено: {stats['skipped']}")
 
             if stats["successful"] > 0:
                 print(f"\n🎉 Отлично! Отправлено {stats['successful']} заявок!")
@@ -81,7 +98,6 @@ class CLIInterface:
 
     @staticmethod
     def run_application():
-        """Главная функция запуска приложения"""
         try:
             cli = CLIInterface()
 

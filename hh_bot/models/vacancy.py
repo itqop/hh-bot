@@ -1,7 +1,3 @@
-"""
-📋 Модели данных для работы с вакансиями HH.ru
-"""
-
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
 import re
@@ -9,7 +5,6 @@ import re
 
 @dataclass
 class Employer:
-    """Информация о работодателе"""
 
     id: str
     name: str
@@ -22,7 +17,6 @@ class Employer:
 
 @dataclass
 class Experience:
-    """Информация об опыте работы"""
 
     id: str
     name: str
@@ -30,7 +24,6 @@ class Experience:
 
 @dataclass
 class Snippet:
-    """Краткая информация о вакансии"""
 
     requirement: Optional[str] = None
     responsibility: Optional[str] = None
@@ -38,7 +31,6 @@ class Snippet:
 
 @dataclass
 class Salary:
-    """Информация о зарплате"""
 
     from_value: Optional[int] = None
     to_value: Optional[int] = None
@@ -48,7 +40,6 @@ class Salary:
 
 @dataclass
 class Vacancy:
-    """Модель вакансии HH.ru"""
 
     id: str
     name: str
@@ -69,7 +60,6 @@ class Vacancy:
 
     @classmethod
     def from_api_response(cls, data: Dict[str, Any]) -> "Vacancy":
-        """Создание экземпляра из ответа API HH.ru"""
         try:
 
             employer_data = data.get("employer", {})
@@ -132,9 +122,9 @@ class Vacancy:
             )
 
     def has_python(self) -> bool:
-        """Проверка упоминания Python в вакансии"""
         text_to_check = (
-            f"{self.name} {self.snippet.requirement or ''} " f"{self.snippet.responsibility or ''}"
+            f"{self.name} {self.snippet.requirement or ''} "
+            f"{self.snippet.responsibility or ''}"
         )
         python_patterns = [
             r"\bpython\b",
@@ -151,8 +141,20 @@ class Vacancy:
                 return True
         return False
 
+    def matches_keywords(self, keywords: str) -> bool:
+        text_to_check = (
+            f"{self.name} {self.snippet.requirement or ''} "
+            f"{self.snippet.responsibility or ''}"
+        ).lower()
+
+        search_terms = [term.strip().lower() for term in keywords.split()]
+
+        for term in search_terms:
+            if term in text_to_check:
+                return True
+        return False
+
     def is_junior_level(self) -> bool:
-        """Проверка на junior уровень"""
         junior_keywords = [
             "junior",
             "джуниор",
@@ -173,7 +175,6 @@ class Vacancy:
         return False
 
     def get_salary_info(self) -> str:
-        """Получение информации о зарплате в читаемом виде"""
         if not self.salary:
             return "Зарплата не указана"
 
@@ -192,7 +193,6 @@ class Vacancy:
             return "Зарплата не указана"
 
     def get_full_text(self) -> str:
-        """Получение полного текста вакансии для анализа"""
         text_parts = [
             self.name,
             self.employer.name,
@@ -205,17 +205,16 @@ class Vacancy:
 
 @dataclass
 class ApplicationResult:
-    """Результат подачи заявки на вакансию"""
 
     vacancy_id: str
     vacancy_name: str
     success: bool
     already_applied: bool = False
+    skipped: bool = False
     error_message: Optional[str] = None
     timestamp: Optional[str] = None
 
     def __post_init__(self):
-        """Устанавливаем timestamp если не указан"""
         if self.timestamp is None:
             from datetime import datetime
 
@@ -224,7 +223,6 @@ class ApplicationResult:
 
 @dataclass
 class SearchStats:
-    """Статистика поиска вакансий"""
 
     total_found: int = 0
     pages_processed: int = 0
@@ -235,13 +233,13 @@ class SearchStats:
     without_test: int = 0
 
     def __str__(self) -> str:
-        return f"""
-📊 Статистика поиска:
-   📋 Всего найдено: {self.total_found}
-   📄 Страниц обработано: {self.pages_processed}
-   ✅ Прошло фильтрацию: {self.filtered_count}
-   🐍 Python вакансий: {self.python_vacancies}
-   👶 Junior уровня: {self.junior_vacancies}
-   💰 С указанной ЗП: {self.with_salary}
-   📝 Без тестов: {self.without_test}
-"""
+        return (
+            f"📊 Статистика поиска:\n"
+            f"   📋 Всего найдено: {self.total_found}\n"
+            f"   📄 Страниц обработано: {self.pages_processed}\n"
+            f"   ✅ Прошло фильтрацию: {self.filtered_count}\n"
+            f"   🐍 Python вакансий: {self.python_vacancies}\n"
+            f"   👶 Junior уровня: {self.junior_vacancies}\n"
+            f"   💰 С указанной ЗП: {self.with_salary}\n"
+            f"   📝 Без тестов: {self.without_test}"
+        )

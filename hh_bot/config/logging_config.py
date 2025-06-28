@@ -1,7 +1,3 @@
-"""
-📝 Конфигурация логирования для HH.ru автоматизации
-"""
-
 import logging
 import logging.handlers
 from pathlib import Path
@@ -14,7 +10,9 @@ class LoggingConfigurator:
 
     @staticmethod
     def setup_logging(
-        log_level: int = logging.INFO, log_file: Optional[str] = None, console_output: bool = True
+        log_level: int = logging.INFO,
+        log_file: Optional[str] = None,
+        console_output: bool = True,
     ) -> None:
         """
         Настройка системы логирования
@@ -31,7 +29,8 @@ class LoggingConfigurator:
         root_logger.handlers.clear()
 
         formatter = logging.Formatter(
-            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
 
         if console_output:
