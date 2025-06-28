@@ -197,7 +197,7 @@ class Settings:
         return bool(self.gemini.api_key)
 
     def get_exclude_keywords(self) -> list:
-        return ['стажер', 'cv']
+        return ["стажер", "cv"]
 
 
 settings = Settings()

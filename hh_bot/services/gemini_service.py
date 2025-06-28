@@ -84,8 +84,14 @@ class GeminiApiClient:
                 json_str = content[json_start:json_end]
                 parsed_response = json.loads(json_str)
 
-                score = parsed_response.get("match_score", 0)
-                logger.info(f"Gemini анализ завершен: {score}")
+                if "match_score" in parsed_response:
+                    score = parsed_response.get("match_score", 0)
+                    logger.info(f"Gemini анализ завершен: {score}")
+                elif "cover_letter" in parsed_response:
+                    logger.info("Gemini сгенерировал сопроводительное письмо")
+                else:
+                    logger.info("Получен ответ от Gemini")
+
                 return parsed_response
             else:
                 logger.error("JSON не найден в ответе Gemini")
@@ -330,3 +336,88 @@ class GeminiAIService:
             return score >= settings.gemini.match_threshold
 
         return self.analyzer.should_apply(vacancy)
+
+    def generate_cover_letter(self, vacancy: Vacancy) -> Optional[str]:
+        """Генерация сопроводительного письма для вакансии"""
+        if not self.is_available():
+            logger.warning("Gemini API недоступен, используем базовое письмо")
+            return self._get_default_cover_letter()
+
+        try:
+            resume_data = self.resume_loader.load()
+            vacancy_text = self._get_vacancy_full_text(vacancy)
+
+            experience_text = resume_data.get("experience", "")
+            about_me_text = resume_data.get("about_me", "")
+            skills_text = resume_data.get("skills", "")
+
+            my_profile = f"""
+Опыт работы:
+{experience_text}
+
+О себе:
+{about_me_text}
+
+Навыки и технологии:
+{skills_text}
+"""
+
+            prompt_text = (
+                "Напиши короткое, человечное и честное сопроводительное письмо "
+                "для отклика на вакансию на русском языке. Не придумывай опыт, "
+                "которого нет. Используй только мой реальный опыт и навыки ниже. "
+                "Пиши по делу, дружелюбно и без официоза. Не делай письмо слишком "
+                "длинным. Всегда заканчивай строкой «Telegram — @itqen»."
+            )
+
+            prompt = f"""{prompt_text}
+
+**Верни только JSON с ключом "cover_letter", без других пояснений.**
+
+Пример формата вывода:
+{{"cover_letter": "текст письма здесь"}}
+
+**Вот мой опыт:**
+{my_profile}
+
+**Вот текст вакансии:**
+{vacancy_text}"""
+
+            logger.info("Генерация сопроводительного письма через Gemini")
+            response = self.api_client.generate_content(prompt)
+
+            if response and "cover_letter" in response:
+                cover_letter = response["cover_letter"]
+                logger.info("Сопроводительное письмо сгенерировано")
+                return cover_letter
+            else:
+                logger.error("Не удалось получить сопроводительное письмо от Gemini")
+                return self._get_default_cover_letter()
+
+        except Exception as e:
+            logger.error(f"Ошибка генерации сопроводительного письма: {e}")
+            return self._get_default_cover_letter()
+
+    def _get_vacancy_full_text(self, vacancy: Vacancy) -> str:
+        """Получение полного текста вакансии"""
+        parts = [
+            f"Название: {vacancy.name}",
+            f"Компания: {vacancy.employer.name}",
+        ]
+
+        if vacancy.snippet.requirement:
+            parts.append(f"Требования: {vacancy.snippet.requirement}")
+
+        if vacancy.snippet.responsibility:
+            parts.append(f"Обязанности: {vacancy.snippet.responsibility}")
+
+        return "\n\n".join(parts)
+
+    def _get_default_cover_letter(self) -> str:
+        """Базовое сопроводительное письмо на случай ошибки"""
+        return """Добрый день!
+
+Заинтересован в данной вакансии. Готов обсудить детали и возможности сотрудничества.
+
+С уважением,
+Telegram — @itqen"""

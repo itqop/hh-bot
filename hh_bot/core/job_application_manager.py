@@ -131,7 +131,9 @@ class AutomationOrchestrator:
     def _apply_to_vacancies(self, vacancies: List[Vacancy]) -> List[ApplicationResult]:
         max_successful_apps = settings.application.max_applications
 
-        logger.info(f"📨 ЭТАП 4: Подача заявок (максимум {max_successful_apps} успешных)")
+        logger.info(
+            f"📨 ЭТАП 4: Подача заявок (максимум {max_successful_apps} успешных)"
+        )
         logger.info("💡 Между заявками добавляются паузы")
         logger.info("💡 Лимит считается только по успешным заявкам")
 
@@ -141,27 +143,34 @@ class AutomationOrchestrator:
 
         for vacancy in vacancies:
             if successful_count >= max_successful_apps:
-                logger.info(f"🎯 Достигнут лимит успешных заявок: {max_successful_apps}")
+                logger.info(
+                    f"🎯 Достигнут лимит успешных заявок: {max_successful_apps}"
+                )
                 break
 
             processed_count += 1
             truncated_name = UIFormatter.truncate_text(vacancy.name, medium=True)
             logger.info(
-                f"Обработка {processed_count}: {truncated_name} (успешных: {successful_count}/{max_successful_apps})"
+                f"Обработка {processed_count}: {truncated_name} "
+                f"(успешных: {successful_count}/{max_successful_apps})"
             )
 
             try:
-                result = self.browser_service.apply_to_vacancy(
-                    vacancy.alternate_url, vacancy.name
-                )
+                result = self.browser_service.apply_to_vacancy(vacancy)
                 application_results.append(result)
                 self._log_application_result(result)
 
                 if result.success:
                     successful_count += 1
-                    logger.info(f"   🎉 Успешных заявок: {successful_count}/{max_successful_apps}")
+                    logger.info(
+                        f"   🎉 Успешных заявок: "
+                        f"{successful_count}/{max_successful_apps}"
+                    )
 
-                if processed_count < len(vacancies) and successful_count < max_successful_apps:
+                if (
+                    processed_count < len(vacancies)
+                    and successful_count < max_successful_apps
+                ):
                     self.browser_service.add_random_pause()
 
             except Exception as e:
@@ -174,7 +183,10 @@ class AutomationOrchestrator:
                 )
                 application_results.append(error_result)
 
-        logger.info(f"🏁 Обработка завершена. Обработано вакансий: {processed_count}, успешных заявок: {successful_count}")
+        logger.info(
+            f"🏁 Обработка завершена. Обработано вакансий: {processed_count}, "
+            f"успешных заявок: {successful_count}"
+        )
         return application_results
 
     def _log_search_results(

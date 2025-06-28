@@ -85,7 +85,7 @@ class CLIInterface:
             print(f"📝 Всего заявок: {stats['total_applications']}")
             print(f"✅ Успешных: {stats['successful']}")
             print(f"❌ Неудачных: {stats['failed']}")
-            
+
             if "skipped" in stats and stats["skipped"] > 0:
                 print(f"⏭️ Пропущено: {stats['skipped']}")
 

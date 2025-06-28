@@ -15,12 +15,14 @@ from selenium.common.exceptions import NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 
 from ..config.settings import settings, AppConstants, UIFormatter
-from ..models.vacancy import ApplicationResult
+from ..models.vacancy import ApplicationResult, Vacancy
+
 
 class SubmissionResult(Enum):
     SUCCESS = "success"
-    FAILED = "failed" 
+    FAILED = "failed"
     SKIPPED = "skipped"
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,7 @@ class SessionManager:
                 "timestamp": time.time(),
             }
 
-            with open(self.cookies_file, 'w', encoding='utf-8') as f:
+            with open(self.cookies_file, "w", encoding="utf-8") as f:
                 json.dump(session_data, f, indent=2, ensure_ascii=False)
 
             logger.info(f"Сессия сохранена в {self.cookies_file}")
@@ -61,7 +63,7 @@ class SessionManager:
                 logger.info("Файл сессии не найден")
                 return False
 
-            with open(self.cookies_file, 'r', encoding='utf-8') as f:
+            with open(self.cookies_file, "r", encoding="utf-8") as f:
                 session_data = json.load(f)
 
             if not self._is_session_valid(session_data):
@@ -167,11 +169,11 @@ class AuthenticationHandler:
         try:
             print("\n🔐 ПРОВЕРКА СОХРАНЕННОЙ СЕССИИ")
             logger.info("Проверяем сохраненную сессию...")
-            
+
             if self.session_manager.load_session():
                 self.driver.refresh()
                 time.sleep(3)
-                
+
                 if self._check_authentication():
                     print("✅ Использована сохраненная сессия")
                     logger.info("Авторизация через сохраненную сессию успешна!")
@@ -193,12 +195,12 @@ class AuthenticationHandler:
 
             if self._check_authentication():
                 logger.info("Авторизация успешна!")
-                
+
                 if self.session_manager.save_session():
                     print("✅ Сессия сохранена для следующих запусков")
                 else:
                     print("⚠️ Не удалось сохранить сессию")
-                
+
                 return True
             else:
                 logger.error("Авторизация не завершена")
@@ -250,21 +252,19 @@ class VacancyApplicator:
     def __init__(self, driver: webdriver.Chrome):
         self.driver = driver
 
-    def apply_to_vacancy(
-        self, vacancy_url: str, vacancy_name: str
-    ) -> ApplicationResult:
+    def apply_to_vacancy(self, vacancy: Vacancy) -> ApplicationResult:
         """Подача заявки на вакансию"""
         try:
-            truncated_name = UIFormatter.truncate_text(vacancy_name)
+            truncated_name = UIFormatter.truncate_text(vacancy.name)
             logger.info(f"Переход к вакансии: {truncated_name}...")
-            self.driver.get(vacancy_url)
+            self.driver.get(vacancy.alternate_url)
             time.sleep(3)
 
             apply_button = self._find_apply_button()
             if not apply_button:
                 return ApplicationResult(
                     vacancy_id="",
-                    vacancy_name=vacancy_name,
+                    vacancy_name=vacancy.name,
                     success=False,
                     error_message="Кнопка отклика не найдена",
                 )
@@ -273,7 +273,7 @@ class VacancyApplicator:
             if self._is_already_applied(button_text):
                 return ApplicationResult(
                     vacancy_id="",
-                    vacancy_name=vacancy_name,
+                    vacancy_name=vacancy.name,
                     success=False,
                     already_applied=True,
                     error_message="Уже откликались на эту вакансию",
@@ -283,28 +283,30 @@ class VacancyApplicator:
             time.sleep(2)
 
             logger.info("Кнопка отклика нажата, ищем форму заявки...")
-            
-            submit_result = self._submit_application_form()
-            
+
+            submit_result = self._submit_application_form(vacancy)
+
             if submit_result == SubmissionResult.SUCCESS:
                 logger.info("✅ Заявка успешно отправлена")
                 return ApplicationResult(
-                    vacancy_id="", vacancy_name=vacancy_name, success=True
+                    vacancy_id="", vacancy_name=vacancy.name, success=True
                 )
             elif submit_result == SubmissionResult.SKIPPED:
                 logger.warning("⚠️ Вакансия пропущена (нет модального окна)")
                 return ApplicationResult(
                     vacancy_id="",
-                    vacancy_name=vacancy_name,
+                    vacancy_name=vacancy.name,
                     success=False,
                     skipped=True,
-                    error_message="Модальное окно не найдено (возможно тестовая вакансия)",
+                    error_message=(
+                        "Модальное окно не найдено " "(возможно тестовая вакансия)"
+                    ),
                 )
             else:  # FAILED
                 logger.warning("❌ Не удалось отправить заявку в модальном окне")
                 return ApplicationResult(
                     vacancy_id="",
-                    vacancy_name=vacancy_name,
+                    vacancy_name=vacancy.name,
                     success=False,
                     error_message="Ошибка отправки в модальном окне",
                 )
@@ -313,7 +315,7 @@ class VacancyApplicator:
             logger.error(f"Ошибка при подаче заявки: {e}")
             return ApplicationResult(
                 vacancy_id="",
-                vacancy_name=vacancy_name,
+                vacancy_name=vacancy.name,
                 success=False,
                 error_message=str(e),
             )
@@ -334,19 +336,19 @@ class VacancyApplicator:
             indicator in button_text for indicator in self.ALREADY_APPLIED_INDICATORS
         )
 
-    def _submit_application_form(self) -> SubmissionResult:
+    def _submit_application_form(self, vacancy: Vacancy) -> SubmissionResult:
         """Отправка заявки в модальном окне"""
         try:
             modal_selectors = [
                 '[data-qa="modal-overlay"]',
-                '.magritte-modal-overlay',
+                ".magritte-modal-overlay",
                 '[data-qa="modal"]',
                 '[data-qa="vacancy-response-popup"]',
-                '.vacancy-response-popup',
-                '.modal',
-                '.bloko-modal',
+                ".vacancy-response-popup",
+                ".modal",
+                ".bloko-modal",
             ]
-            
+
             submit_selectors = [
                 '[data-qa="vacancy-response-submit-popup"]',
                 'button[form="RESPONSE_MODAL_FORM_ID"]',
@@ -372,7 +374,10 @@ class VacancyApplicator:
                     continue
 
             if not modal_found:
-                logger.warning("⚠️ Модальное окно не найдено - пропускаем вакансию (возможно тестовая или ошибка)")
+                logger.warning(
+                    "⚠️ Модальное окно не найдено - пропускаем вакансию "
+                    "(возможно тестовая или ошибка)"
+                )
                 return SubmissionResult.SKIPPED
 
             form_selectors = [
@@ -380,7 +385,7 @@ class VacancyApplicator:
                 'form[id="RESPONSE_MODAL_FORM_ID"]',
                 'form[data-qa*="response"]',
             ]
-            
+
             form_found = False
             for form_selector in form_selectors:
                 try:
@@ -391,11 +396,12 @@ class VacancyApplicator:
                         break
                 except Exception:
                     continue
-                    
+
             if not form_found:
                 logger.warning("Форма отклика не найдена в модальном окне - пропускаем")
                 return SubmissionResult.SKIPPED
 
+            self._add_cover_letter_if_possible(vacancy)
             time.sleep(1)
 
             for selector in submit_selectors:
@@ -404,8 +410,13 @@ class VacancyApplicator:
                         EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
                     )
                     if submit_button:
-                        logger.info(f"Нажимаем кнопку отправки: {submit_button.text.strip()}")
-                        self.driver.execute_script("arguments[0].click();", submit_button)
+                        logger.info(
+                            f"Нажимаем кнопку отправки: "
+                            f"{submit_button.text.strip()}"
+                        )
+                        self.driver.execute_script(
+                            "arguments[0].click();", submit_button
+                        )
                         time.sleep(3)
                         if self._check_success_message():
                             return SubmissionResult.SUCCESS
@@ -421,12 +432,93 @@ class VacancyApplicator:
             logger.error(f"Ошибка в модальном окне: {e}")
             return SubmissionResult.FAILED
 
+    def _add_cover_letter_if_possible(self, vacancy: Vacancy) -> None:
+        """Добавление сопроводительного письма если возможно"""
+        try:
+            cover_letter_button_selectors = [
+                '[data-qa="add-cover-letter"]',
+                'button[data-qa*="cover-letter"]',
+                'button:contains("Добавить сопроводительное")',
+                'button:contains("сопроводительное")',
+            ]
+
+            cover_letter_button = None
+            for selector in cover_letter_button_selectors:
+                try:
+                    if selector.startswith("button:contains"):
+                        buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                        text_to_find = selector.split('"')[1].lower()
+                        for button in buttons:
+                            if text_to_find in button.text.lower():
+                                cover_letter_button = button
+                                break
+                    else:
+                        cover_letter_button = self.driver.find_element(
+                            By.CSS_SELECTOR, selector
+                        )
+
+                    if cover_letter_button:
+                        break
+                except Exception:
+                    continue
+
+            if not cover_letter_button:
+                logger.info("Кнопка сопроводительного письма не найдена")
+                return
+
+            logger.info("Найдена кнопка сопроводительного письма, нажимаем...")
+            self.driver.execute_script("arguments[0].click();", cover_letter_button)
+            time.sleep(2)
+
+            cover_letter_field_selectors = [
+                'textarea[data-qa*="cover-letter"]',
+                'textarea[name*="letter"]',
+                'textarea[placeholder*="письм"]',
+                'textarea[id*="letter"]',
+                ".modal textarea",
+                "form textarea",
+            ]
+
+            cover_letter_field = None
+            for selector in cover_letter_field_selectors:
+                try:
+                    cover_letter_field = WebDriverWait(self.driver, 3).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                    )
+                    if cover_letter_field:
+                        break
+                except Exception:
+                    continue
+
+            if not cover_letter_field:
+                logger.warning("Поле для сопроводительного письма не найдено")
+                return
+
+            logger.info("Генерация сопроводительного письма...")
+
+            from ..services.gemini_service import GeminiAIService
+
+            gemini_service = GeminiAIService()
+            cover_letter_text = gemini_service.generate_cover_letter(vacancy)
+
+            if cover_letter_text:
+                logger.info("Заполняем сопроводительное письмо...")
+                cover_letter_field.clear()
+                cover_letter_field.send_keys(cover_letter_text)
+                logger.info("✅ Сопроводительное письмо добавлено")
+            else:
+                logger.warning("Не удалось сгенерировать сопроводительное письмо")
+
+        except Exception as e:
+            logger.warning(f"Ошибка при добавлении сопроводительного письма: {e}")
+            logger.info("Продолжаем без сопроводительного письма")
+
     def _check_success_message(self) -> bool:
         """Проверка успешной отправки заявки"""
         try:
             success_indicators = [
                 "отклик отправлен",
-                "заявка отправлена", 
+                "заявка отправлена",
                 "успешно отправлено",
                 "спасибо за отклик",
                 "ваш отклик получен",
@@ -435,50 +527,59 @@ class VacancyApplicator:
                 "резюме отправлено",
                 "откликнулись на вакансию",
             ]
-            
+
             success_selectors = [
                 '[data-qa*="success"]',
                 '[data-qa*="sent"]',
-                '.success-message',
-                '.response-sent',
+                ".success-message",
+                ".response-sent",
                 '[class*="success"]',
             ]
-            
+
             for selector in success_selectors:
                 try:
-                    success_element = self.driver.find_element(By.CSS_SELECTOR, selector)
+                    success_element = self.driver.find_element(
+                        By.CSS_SELECTOR, selector
+                    )
                     if success_element and success_element.is_displayed():
-                        logger.info(f"Найден элемент успеха: {selector} - {success_element.text}")
+                        logger.info(
+                            f"Найден элемент успеха: {selector} - "
+                            f"{success_element.text}"
+                        )
                         return True
                 except Exception:
                     continue
-            
+
             page_text = self.driver.page_source.lower()
-            
+
             for indicator in success_indicators:
                 if indicator in page_text:
                     logger.info(f"Найдено подтверждение: '{indicator}'")
                     return True
-            
+
             current_url = self.driver.current_url
-            if "sent" in current_url or "success" in current_url or "response" in current_url:
+            if (
+                "sent" in current_url
+                or "success" in current_url
+                or "response" in current_url
+            ):
                 logger.info(f"URL указывает на успешную отправку: {current_url}")
                 return True
-                
+
             modal_disappeared = True
             try:
                 self.driver.find_element(By.CSS_SELECTOR, '[data-qa="modal-overlay"]')
                 modal_disappeared = False
             except NoSuchElementException:
                 pass
-                
+
             if modal_disappeared:
                 logger.info("Модальное окно исчезло - возможно отклик отправлен")
                 return True
-                
+
             logger.info("Подтверждение отправки не найдено")
             return False
-            
+
         except Exception as e:
             logger.error(f"Ошибка проверки успеха: {e}")
             return False
@@ -531,19 +632,17 @@ class BrowserService:
             self._is_authenticated = True
         return success
 
-    def apply_to_vacancy(
-        self, vacancy_url: str, vacancy_name: str
-    ) -> ApplicationResult:
+    def apply_to_vacancy(self, vacancy: Vacancy) -> ApplicationResult:
         """Подача заявки на вакансию"""
         if not self.is_ready():
             return ApplicationResult(
                 vacancy_id="",
-                vacancy_name=vacancy_name,
+                vacancy_name=vacancy.name,
                 success=False,
                 error_message="Браузер не готов или нет авторизации",
             )
 
-        return self.applicator.apply_to_vacancy(vacancy_url, vacancy_name)
+        return self.applicator.apply_to_vacancy(vacancy)
 
     def add_random_pause(self) -> None:
         """Случайная пауза между действиями"""
