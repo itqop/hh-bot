@@ -20,6 +20,15 @@ class CLIInterface:
         print(f"📊 Максимум заявок: {settings.application.max_applications}")
         ai_status = "✅ Доступен" if settings.enable_ai_matching() else "❌ Недоступен"
         print(f"🤖 Gemini AI: {ai_status}")
+        
+        if settings.enable_ai_matching():
+            try:
+                from ..services.gemini_service import GeminiAIService
+                gemini_service = GeminiAIService()
+                print(f"   {gemini_service.get_api_status()}")
+            except Exception:
+                pass
+        
         browser_mode = "Фоновый" if settings.browser.headless else "Видимый"
         print(f"🌐 Режим браузера: {browser_mode}")
 
@@ -101,6 +110,14 @@ class CLIInterface:
                 print(f"\n🎉 Отлично! Отправлено {stats['successful']} заявок!")
             else:
                 print("\n😕 Заявки не были отправлены")
+
+        if settings.enable_ai_matching():
+            try:
+                from ..services.gemini_service import GeminiAIService
+                gemini_service = GeminiAIService()
+                print(f"\n{gemini_service.get_api_status()}")
+            except Exception:
+                pass
 
         print(UIFormatter.create_separator(long=True))
 

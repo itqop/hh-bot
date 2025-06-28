@@ -75,6 +75,9 @@ class GeminiConfig:
     model: str = AppConstants.GEMINI_MODEL
     base_url: str = AppConstants.GEMINI_BASE_URL
     match_threshold: float = AppConstants.DEFAULT_AI_THRESHOLD
+    
+    max_requests_per_minute: int = 15
+    rate_limit_window_seconds: int = 61
 
 
 @dataclass

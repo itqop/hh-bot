@@ -1,7 +1,9 @@
 import json
 import requests
 import logging
+import time
 from typing import Dict, Optional, Tuple, List
+from collections import deque
 import traceback
 from pathlib import Path
 
@@ -11,6 +13,48 @@ from ..models.vacancy import Vacancy
 logger = logging.getLogger(__name__)
 
 
+class RateLimiter:
+    """Ограничитель скорости запросов к API"""
+    
+    def __init__(self, max_requests: int, window_seconds: int):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.request_times = deque()
+        
+    def wait_if_needed(self) -> None:
+        """Ожидание если превышен лимит запросов"""
+        current_time = time.time()
+        
+        while (self.request_times and 
+               current_time - self.request_times[0] >= self.window_seconds):
+            self.request_times.popleft()
+        
+        if len(self.request_times) >= self.max_requests:
+            wait_time = self.window_seconds - (current_time - self.request_times[0])
+            if wait_time > 0:
+                logger.info(f"⏳ Достигнут лимит {self.max_requests} запросов в минуту. "
+                           f"Ожидание {wait_time:.1f} секунд...")
+                time.sleep(wait_time + 0.1) 
+        
+        self.request_times.append(current_time)
+    
+    def get_remaining_requests(self) -> int:
+        """Количество оставшихся запросов в текущем окне"""
+        current_time = time.time()
+        
+        while (self.request_times and 
+               current_time - self.request_times[0] >= self.window_seconds):
+            self.request_times.popleft()
+        
+        return max(0, self.max_requests - len(self.request_times))
+    
+    def get_status(self) -> str:
+        """Статус rate limiter для логирования"""
+        remaining = self.get_remaining_requests()
+        return (f"📊 API лимит: {remaining}/{self.max_requests} запросов осталось "
+                f"(окно {self.window_seconds}с)")
+
+
 class GeminiApiClient:
     """Клиент для работы с Gemini API"""
 
@@ -18,9 +62,18 @@ class GeminiApiClient:
         self.api_key = api_key
         self.base_url = AppConstants.GEMINI_BASE_URL
         self.model = AppConstants.GEMINI_MODEL
+        
+        # Инициализируем rate limiter
+        self.rate_limiter = RateLimiter(
+            max_requests=settings.gemini.max_requests_per_minute,
+            window_seconds=settings.gemini.rate_limit_window_seconds
+        )
 
     def generate_content(self, prompt: str) -> Optional[Dict]:
         """Генерация контента через Gemini API"""
+        # Применяем rate limiting
+        self.rate_limiter.wait_if_needed()
+        
         url = f"{self.base_url}/models/{self.model}:generateContent"
 
         headers = {"Content-Type": "application/json"}
@@ -35,7 +88,7 @@ class GeminiApiClient:
         }
 
         try:
-            logger.info("Отправка запроса к Gemini API")
+            logger.info(f"Отправка запроса к Gemini API. {self.rate_limiter.get_status()}")
             response = requests.post(
                 url,
                 headers=headers,
@@ -422,3 +475,9 @@ class GeminiAIService:
 
 С уважением,
 Telegram — @itqen"""
+    
+    def get_api_status(self) -> str:
+        """Получение статуса API лимитов"""
+        if not self.api_client:
+            return "❌ Gemini API недоступен"
+        return self.api_client.rate_limiter.get_status()
