@@ -412,41 +412,44 @@ class VacancyApplicator:
                 logger.warning("Форма отклика не найдена в модальном окне - пропускаем")
                 return SubmissionResult.SKIPPED
 
-            self._add_cover_letter_if_possible(vacancy)
-            time.sleep(1)
-
+            submit_button = None
             for selector in submit_selectors:
                 try:
                     submit_button = WebDriverWait(self.driver, 3).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
                     )
                     if submit_button:
-                        button_text = submit_button.text.strip().lower()
-                        
-                        if self._is_already_applied(button_text):
-                            logger.warning(
-                                f"⚠️ Кнопка указывает что уже откликались: "
-                                f"{submit_button.text.strip()}"
-                            )
-                            return SubmissionResult.ALREADY_APPLIED
-                        
-                        logger.info(
-                            f"Нажимаем кнопку отправки: "
-                            f"{submit_button.text.strip()}"
-                        )
-                        self.driver.execute_script(
-                            "arguments[0].click();", submit_button
-                        )
-                        time.sleep(3)
-                        if self._check_success_message():
-                            return SubmissionResult.SUCCESS
-                        else:
-                            return SubmissionResult.FAILED
+                        break
                 except Exception:
                     continue
 
-            logger.warning("Кнопка отправки в модальном окне не найдена")
-            return SubmissionResult.FAILED
+            if not submit_button:
+                logger.warning("Кнопка отправки в модальном окне не найдена")
+                return SubmissionResult.FAILED
+
+            button_text = submit_button.text.strip().lower()
+            if self._is_already_applied(button_text):
+                logger.warning(
+                    f"⚠️ Кнопка указывает что уже откликались: "
+                    f"{submit_button.text.strip()}"
+                )
+                return SubmissionResult.ALREADY_APPLIED
+
+            self._add_cover_letter_if_possible(vacancy)
+            time.sleep(1)
+
+            logger.info(
+                f"Нажимаем кнопку отправки: "
+                f"{submit_button.text.strip()}"
+            )
+            self.driver.execute_script(
+                "arguments[0].click();", submit_button
+            )
+            time.sleep(3)
+            if self._check_success_message():
+                return SubmissionResult.SUCCESS
+            else:
+                return SubmissionResult.FAILED
 
         except Exception as e:
             logger.error(f"Ошибка в модальном окне: {e}")
@@ -458,6 +461,8 @@ class VacancyApplicator:
             if not settings.application.use_ai_cover_letters:
                 logger.info("ИИ-сопроводительные письма отключены в настройках")
                 return
+
+            logger.info("Ищем кнопку сопроводительного письма...")
             cover_letter_button_selectors = [
                 '[data-qa="add-cover-letter"]',
                 'button[data-qa*="cover-letter"]',
@@ -486,13 +491,14 @@ class VacancyApplicator:
                     continue
 
             if not cover_letter_button:
-                logger.info("Кнопка сопроводительного письма не найдена")
+                logger.info("📝 Кнопка сопроводительного письма не найдена")
                 return
 
-            logger.info("Найдена кнопка сопроводительного письма, нажимаем...")
+            logger.info("📝 Найдена кнопка сопроводительного письма, нажимаем...")
             self.driver.execute_script("arguments[0].click();", cover_letter_button)
             time.sleep(2)
 
+            logger.info("Ищем поле для ввода письма...")
             cover_letter_field_selectors = [
                 'textarea[data-qa*="cover-letter"]',
                 'textarea[name*="letter"]',
@@ -509,15 +515,16 @@ class VacancyApplicator:
                         EC.presence_of_element_located((By.CSS_SELECTOR, selector))
                     )
                     if cover_letter_field:
+                        logger.info(f"Поле найдено: {selector}")
                         break
                 except Exception:
                     continue
 
             if not cover_letter_field:
-                logger.warning("Поле для сопроводительного письма не найдено")
+                logger.warning("📝 Поле для сопроводительного письма не найдено")
                 return
 
-            logger.info("Генерация сопроводительного письма...")
+            logger.info("📝 Генерация сопроводительного письма...")
 
             from ..services.gemini_service import GeminiAIService
 
@@ -525,15 +532,15 @@ class VacancyApplicator:
             cover_letter_text = gemini_service.generate_cover_letter(vacancy)
 
             if cover_letter_text:
-                logger.info("Заполняем сопроводительное письмо...")
+                logger.info("📝 Заполняем сопроводительное письмо...")
                 cover_letter_field.clear()
                 cover_letter_field.send_keys(cover_letter_text)
                 logger.info("✅ Сопроводительное письмо добавлено")
             else:
-                logger.warning("Не удалось сгенерировать сопроводительное письмо")
+                logger.warning("📝 Не удалось сгенерировать сопроводительное письмо")
 
         except Exception as e:
-            logger.warning(f"Ошибка при добавлении сопроводительного письма: {e}")
+            logger.warning(f"📝 Ошибка при добавлении сопроводительного письма: {e}")
             logger.info("Продолжаем без сопроводительного письма")
 
     def _check_success_message(self) -> bool:

@@ -23,29 +23,36 @@ class RateLimiter:
         
     def wait_if_needed(self) -> None:
         """Ожидание если превышен лимит запросов"""
+        while True:
+            current_time = time.time()
+            self._cleanup_old_requests(current_time)
+            
+            if len(self.request_times) < self.max_requests:
+                break
+                
+            oldest_request_time = self.request_times[0]
+            wait_time = self.window_seconds - (current_time - oldest_request_time) + 0.1
+            
+            logger.info(f"⏳ Достигнут лимит {self.max_requests} запросов. "
+                       f"Ожидание {wait_time:.1f} секунд...")
+            time.sleep(wait_time)
+    
+    def record_request(self) -> None:
+        """Записать новый запрос"""
         current_time = time.time()
-        
+        self._cleanup_old_requests(current_time)
+        self.request_times.append(current_time)
+    
+    def _cleanup_old_requests(self, current_time: float) -> None:
+        """Удаление старых запросов из окна"""
         while (self.request_times and 
                current_time - self.request_times[0] >= self.window_seconds):
             self.request_times.popleft()
-        
-        if len(self.request_times) >= self.max_requests:
-            wait_time = self.window_seconds - (current_time - self.request_times[0])
-            if wait_time > 0:
-                logger.info(f"⏳ Достигнут лимит {self.max_requests} запросов в минуту. "
-                           f"Ожидание {wait_time:.1f} секунд...")
-                time.sleep(wait_time + 0.1) 
-        
-        self.request_times.append(current_time)
     
     def get_remaining_requests(self) -> int:
         """Количество оставшихся запросов в текущем окне"""
         current_time = time.time()
-        
-        while (self.request_times and 
-               current_time - self.request_times[0] >= self.window_seconds):
-            self.request_times.popleft()
-        
+        self._cleanup_old_requests(current_time)
         return max(0, self.max_requests - len(self.request_times))
     
     def get_status(self) -> str:
@@ -71,8 +78,8 @@ class GeminiApiClient:
 
     def generate_content(self, prompt: str) -> Optional[Dict]:
         """Генерация контента через Gemini API"""
-        # Применяем rate limiting
         self.rate_limiter.wait_if_needed()
+        self.rate_limiter.record_request()
         
         url = f"{self.base_url}/models/{self.model}:generateContent"
 
@@ -88,7 +95,8 @@ class GeminiApiClient:
         }
 
         try:
-            logger.info(f"Отправка запроса к Gemini API. {self.rate_limiter.get_status()}")
+            status_after = self.rate_limiter.get_status()
+            logger.info(f"Отправка запроса к Gemini API. {status_after}")
             response = requests.post(
                 url,
                 headers=headers,
