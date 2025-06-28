@@ -250,7 +250,7 @@ class JobApplicationManager:
     def __init__(self):
 
         LoggingConfigurator.setup_logging(
-            log_file="logs/hh_bot.log", console_output=True
+            log_file="logs/hh_bot.log", console_output=False
         )
 
         self.orchestrator = AutomationOrchestrator()
