@@ -65,6 +65,7 @@ class ApplicationConfig:
     pause_min: float = 3.0
     pause_max: float = 6.0
     manual_login: bool = True
+    use_ai_cover_letters: bool = True
 
 
 @dataclass

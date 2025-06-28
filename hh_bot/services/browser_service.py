@@ -435,6 +435,9 @@ class VacancyApplicator:
     def _add_cover_letter_if_possible(self, vacancy: Vacancy) -> None:
         """Добавление сопроводительного письма если возможно"""
         try:
+            if not settings.application.use_ai_cover_letters:
+                logger.info("ИИ-сопроводительные письма отключены в настройках")
+                return
             cover_letter_button_selectors = [
                 '[data-qa="add-cover-letter"]',
                 'button[data-qa*="cover-letter"]',

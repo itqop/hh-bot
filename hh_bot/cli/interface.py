@@ -39,6 +39,14 @@ class CLIInterface:
             print("⚠️ AI фильтрация недоступна (нет GEMINI_API_KEY)")
             use_ai = False
 
+        use_ai_cover_letters = True
+        if settings.enable_ai_matching():
+            cover_letter_choice = input("Использовать ИИ-сопроводительные письма? [y/n]: ").lower()
+            use_ai_cover_letters = cover_letter_choice != "n"
+        else:
+            print("⚠️ ИИ-сопроводительные письма недоступны (нет GEMINI_API_KEY)")
+            use_ai_cover_letters = False
+
         excludes = ", ".join(settings.get_exclude_keywords()[:5])
         print(f"\n🚫 Текущие исключения: {excludes}...")
         exclude_choice = input("Изменить список исключений? [y/n]: ").lower()
@@ -56,7 +64,7 @@ class CLIInterface:
         except ValueError:
             max_apps = settings.application.max_applications
 
-        return keywords, use_ai, max_apps
+        return keywords, use_ai, use_ai_cover_letters, max_apps
 
     @staticmethod
     def _configure_exclude_keywords():
@@ -104,14 +112,16 @@ class CLIInterface:
             cli.print_welcome()
             ResumeFileManager.create_sample_files()
             cli.print_settings_info()
-            keywords, use_ai, max_apps = cli.get_user_preferences()
+            keywords, use_ai, use_ai_cover_letters, max_apps = cli.get_user_preferences()
 
             settings.update_search_keywords(keywords)
             settings.application.max_applications = max_apps
+            settings.application.use_ai_cover_letters = use_ai_cover_letters
 
             print("\n🎯 ЗАПУСК С ПАРАМЕТРАМИ:")
             print(f"🔍 Поиск: {keywords}")
             print(f"🤖 AI: {'Включен' if use_ai else 'Отключен'}")
+            print(f"📝 ИИ-письма: {'Включены' if use_ai_cover_letters else 'Отключены'}")
             print(f"📊 Максимум заявок: {max_apps}")
 
             confirm = input("\nНачать автоматизацию? [y/n]: ").lower()
