@@ -36,7 +36,7 @@ class AutomationOrchestrator:
                 return {"error": "Подходящие вакансии не найдены"}
 
             if use_ai and self._get_ai_service().is_available():
-                vacancies = self._ai_filter_vacancies(vacancies[:3])
+                vacancies = self._ai_filter_vacancies(vacancies)
                 if not vacancies:
                     return {"error": "После AI фильтрации подходящих вакансий нет"}
 

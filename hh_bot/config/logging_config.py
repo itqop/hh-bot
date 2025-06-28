@@ -12,7 +12,7 @@ class LoggingConfigurator:
     def setup_logging(
         log_level: int = logging.INFO,
         log_file: Optional[str] = None,
-        console_output: bool = True,
+        console_output: bool = False,
     ) -> None:
         """
         Настройка системы логирования
