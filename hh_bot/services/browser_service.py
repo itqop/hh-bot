@@ -22,6 +22,7 @@ class SubmissionResult(Enum):
     SUCCESS = "success"
     FAILED = "failed"
     SKIPPED = "skipped"
+    ALREADY_APPLIED = "already_applied"
 
 
 logger = logging.getLogger(__name__)
@@ -246,6 +247,7 @@ class VacancyApplicator:
         "заявка отправлена",
         "response sent",
         "уже откликнулись",
+        "повторно",
         "чат",
     ]
 
@@ -290,6 +292,15 @@ class VacancyApplicator:
                 logger.info("✅ Заявка успешно отправлена")
                 return ApplicationResult(
                     vacancy_id="", vacancy_name=vacancy.name, success=True
+                )
+            elif submit_result == SubmissionResult.ALREADY_APPLIED:
+                logger.warning("⚠️ Уже откликались на эту вакансию")
+                return ApplicationResult(
+                    vacancy_id="",
+                    vacancy_name=vacancy.name,
+                    success=False,
+                    already_applied=True,
+                    error_message="Уже откликались на эту вакансию",
                 )
             elif submit_result == SubmissionResult.SKIPPED:
                 logger.warning("⚠️ Вакансия пропущена (нет модального окна)")
@@ -410,6 +421,15 @@ class VacancyApplicator:
                         EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
                     )
                     if submit_button:
+                        button_text = submit_button.text.strip().lower()
+                        
+                        if self._is_already_applied(button_text):
+                            logger.warning(
+                                f"⚠️ Кнопка указывает что уже откликались: "
+                                f"{submit_button.text.strip()}"
+                            )
+                            return SubmissionResult.ALREADY_APPLIED
+                        
                         logger.info(
                             f"Нажимаем кнопку отправки: "
                             f"{submit_button.text.strip()}"
